@@ -82,33 +82,45 @@ export async function sendDiscordAlert(
     });
 
     collector.on("collect", async (interaction) => {
-      if (interaction.customId === "copy_contract") {
-        await interaction.reply({
-          content: `${token.mint}`,
-          ephemeral: true,
-        });
-      }
+      if (!interaction.isButton()) return;
 
-      if (interaction.customId === "delete_message") {
-        const member = interaction.member;
-        if (
-          "permissions" in member &&
-          member.permissions.has(PermissionsBitField.Flags.ManageMessages)
-        ) {
-          // ✅ Acknowledge interaction immediately
-          await interaction.deferUpdate(); // prevents "This interaction failed"
-
-          // Delete the message
-          await sentMessage.delete();
-
-          // Optional: send ephemeral confirmation
-          await interaction.followUp({
-            content: "Message deleted ✅",
+      try {
+        if (interaction.customId === "copy_contract") {
+          await interaction.reply({
+            content: `${token.mint}`,
             ephemeral: true,
           });
-        } else {
+        }
+
+        if (interaction.customId === "delete_message") {
+          const member = interaction.member;
+          if (
+            "permissions" in member &&
+            member.permissions.has(PermissionsBitField.Flags.ManageMessages)
+          ) {
+            // ✅ Defer update immediately to acknowledge the interaction
+            await interaction.deferUpdate();
+
+            // Delete the message
+            await sentMessage.delete();
+
+            // Optional: ephemeral confirmation
+            await interaction.followUp({
+              content: "Message deleted ✅",
+              ephemeral: true,
+            });
+          } else {
+            await interaction.reply({
+              content: "You do not have permission to delete this message ❌",
+              ephemeral: true,
+            });
+          }
+        }
+      } catch (err) {
+        console.error("Interaction error:", err);
+        if (!interaction.replied && !interaction.deferred) {
           await interaction.reply({
-            content: "You do not have permission to delete this message ❌",
+            content: "Something went wrong ❌",
             ephemeral: true,
           });
         }
