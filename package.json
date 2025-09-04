@@ -1,0 +1,27 @@
+{
+  "name": "migration_tracker",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "npx tsx src/bot.ts",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@metaplex-foundation/js": "^0.20.1",
+    "@metaplex/js": "^4.12.0",
+    "@solana/web3.js": "^1.98.4",
+    "discord.js": "^14.22.1",
+    "dotenv": "^17.2.1",
+    "node-fetch": "^3.3.2"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.2"
+  }
+}
