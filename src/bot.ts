@@ -5,6 +5,7 @@ import { Connection, clusterApiUrl } from "@solana/web3.js";
 import { createTxProcessor } from "./utils/txProcessor";
 import { createQueue } from "./utils/queue";
 import { createSolanaWs } from "./utils/websocket";
+import express from "express";
 
 dotenv.config();
 
@@ -72,3 +73,13 @@ discordClient.once("clientReady", () => {
   console.log(`Logged in as ${discordClient.user?.tag}`);
 });
 discordClient.login(process.env.DISCORD_BOT_TOKEN);
+
+// -----------------
+// Tiny Web Server
+// -----------------
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.get("/", (req: any, res: any) => res.send("Bot is running!"));
+
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
