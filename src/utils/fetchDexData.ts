@@ -1,4 +1,4 @@
-import { Connection, PublicKey } from "@solana/web3.js";
+import { Connection } from "@solana/web3.js";
 import { getTokenMetadata } from "./metadata";
 import { getBestPairAddress } from "./getPair";
 import { TokenAlert } from "../types";

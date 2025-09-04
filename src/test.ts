@@ -1,4 +1,3 @@
-import { createTxProcessor } from "./utils/txProcessor";
 import { Client, GatewayIntentBits } from "discord.js";
 import {
   Connection,
@@ -8,7 +7,6 @@ import {
 } from "@solana/web3.js";
 import dotenv from "dotenv";
 import { getTokenMetadata } from "./utils/metadata";
-import { getBestPairAddress } from "./utils/getPair";
 import { sendDiscordAlert } from "./utils/discord";
 import { fetchDexData } from "./utils/fetchDexData";
 import { sleep } from "./utils/sleep";

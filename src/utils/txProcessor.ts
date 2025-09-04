@@ -5,10 +5,7 @@ import {
   GetVersionedTransactionConfig,
 } from "@solana/web3.js";
 import { sendDiscordAlert } from "./discord";
-import { getTokenMetadata } from "./metadata";
-import { getBestPairAddress } from "./getPair";
 import { Client } from "discord.js";
-import { TokenAlert } from "../types";
 import { fetchDexData } from "./fetchDexData";
 
 // Global set to track mints already sent to Discord
