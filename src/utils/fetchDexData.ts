@@ -1,5 +1,5 @@
 import { Connection, PublicKey } from "@solana/web3.js";
-import { getTokenMetadata, getTokenMetadataV2 } from "./metadata";
+import { getTokenMetadata } from "./metadata";
 import { getBestPairAddress } from "./getPair";
 import { TokenAlert } from "../types";
 import { findHolders } from "./getHolders";
@@ -58,7 +58,7 @@ export async function fetchDexData(
   connection: Connection
 ): Promise<TokenAlert> {
   // 🔹 Get on-chain/off-chain metadata
-  const metadataV2 = await getTokenMetadataV2(mintAddress, connection);
+  const metadataV2 = await getTokenMetadata(mintAddress, connection);
   const tokenName = metadataV2?.name || mintAddress;
   const tokenSymbol = metadataV2?.symbol || mintAddress;
 

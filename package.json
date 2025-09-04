@@ -16,7 +16,6 @@
   "type": "commonjs",
   "dependencies": {
     "@metaplex-foundation/js": "^0.20.1",
-    "@metaplex/js": "^4.12.0",
     "@solana/web3.js": "^1.98.4",
     "discord.js": "^14.22.1",
     "dotenv": "^17.2.1",
