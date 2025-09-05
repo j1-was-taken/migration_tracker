@@ -1,0 +1,49 @@
+name: Trigger auto deployment for j1-migrations
+
+# When this action will be executed
+on:
+  # Automatically trigger it when detected changes in repo
+  push:
+    branches: 
+      [ main ]
+    paths:
+    - '**'
+    - '.github/workflows/j1-migrations-AutoDeployTrigger-8b0546dc-a64c-4d80-bbbe-77a07af962ec.yml'
+
+  # Allow manual trigger 
+  workflow_dispatch:      
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions: 
+      id-token: write #This is required for requesting the OIDC JWT Token
+      contents: read #Required when GH token is used to authenticate with private repo
+
+    steps:
+      - name: Checkout to the branch
+        uses: actions/checkout@v2
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.J1MIGRATIONS_AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.J1MIGRATIONS_AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.J1MIGRATIONS_AZURE_SUBSCRIPTION_ID }}
+
+      - name: Build and push container image to registry
+        uses: azure/container-apps-deploy-action@v2
+        with:
+          appSourcePath: ${{ github.workspace }}
+          _dockerfilePathKey_: _dockerfilePath_
+          _targetLabelKey_: _targetLabel_
+          registryUrl: j1migrations.azurecr.io
+          registryUsername: ${{ secrets.J1MIGRATIONS_REGISTRY_USERNAME }}
+          registryPassword: ${{ secrets.J1MIGRATIONS_REGISTRY_PASSWORD }}
+          containerAppName: j1-migrations
+          resourceGroup: J1Migrations
+          imageToBuild: j1migrations.azurecr.io/j1-migrations:${{ github.sha }}
+          _buildArgumentsKey_: |
+            _buildArgumentsValues_
+
+
