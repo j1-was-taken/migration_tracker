@@ -16,6 +16,7 @@ export type ProcessorConfig = {
   discordChannelEnv: string; // env var for Discord channel
   filterFn: (inner: any) => boolean; // custom filter function for inner instruction
   launchPad: string;
+  programId: string; // Program ID to filter instructions
 };
 
 export const createTxProcessor =
@@ -29,9 +30,7 @@ export const createTxProcessor =
 
       if (!tx) return;
 
-      const launchpadProgramId = new PublicKey(
-        "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P"
-      );
+      const launchpadProgramId = new PublicKey(config.programId);
 
       const launchpadInstructions = tx.transaction.message.instructions.filter(
         (ix) => ix.programId.equals(launchpadProgramId)

@@ -21,6 +21,9 @@ const connection = new Connection(
 );
 const txProcessor = createTxProcessor(connection, discordClient);
 
+const pumpfunProgramId = "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P";
+const letsBonkProgramId = "LanMV9sAd7wArD4vJFi2qDdfnVhFxYSUg6eADduJ3uj";
+
 // bot.ts
 const pumpfunMigrationQueue = createQueue(
   (sig: string) =>
@@ -32,6 +35,7 @@ const pumpfunMigrationQueue = createQueue(
         inner.parsed.info.mint.endsWith("pump") &&
         inner.program === "spl-token",
       launchPad: "PumpFun",
+      programId: pumpfunProgramId,
     }),
   5000
 );
@@ -48,29 +52,24 @@ const letsbonkMigrationQueue = createQueue(
         inner.parsed.info.mint !==
           "So11111111111111111111111111111111111111112",
       launchPad: "LetsBonk",
+      programId: letsBonkProgramId,
     }),
   5000
 );
 
 // WebSocket
-createSolanaWs(
-  "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P",
-  (signature, logs) => {
-    if (logs.some((l) => l.includes("Instruction: Migrate"))) {
-      pumpfunMigrationQueue.add(signature);
-    }
+createSolanaWs(pumpfunProgramId, (signature, logs) => {
+  if (logs.some((l) => l.includes("Instruction: Migrate"))) {
+    pumpfunMigrationQueue.add(signature);
   }
-);
+});
 
 // WebSocket
-createSolanaWs(
-  "LanMV9sAd7wArD4vJFi2qDdfnVhFxYSUg6eADduJ3uj",
-  (signature, logs) => {
-    if (logs.some((l) => l.includes("Instruction: MigrateToCpswap"))) {
-      letsbonkMigrationQueue.add(signature);
-    }
+createSolanaWs(letsBonkProgramId, (signature, logs) => {
+  if (logs.some((l) => l.includes("Instruction: MigrateToCpswap"))) {
+    letsbonkMigrationQueue.add(signature);
   }
-);
+});
 
 // Discord login
 discordClient.once("clientReady", () => {
