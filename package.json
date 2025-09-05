@@ -17,6 +17,7 @@
   "dependencies": {
     "@metaplex-foundation/js": "^0.20.1",
     "@solana/web3.js": "^1.98.4",
+    "tsx": "^4.20.5",
     "discord.js": "^14.22.1",
     "dotenv": "^17.2.1",
     "node-fetch": "^3.3.2"

@@ -5,12 +5,16 @@ import { Connection, clusterApiUrl } from "@solana/web3.js";
 import { createTxProcessor } from "./utils/txProcessor";
 import { createQueue } from "./utils/queue";
 import { createSolanaWs } from "./utils/websocket";
+import { registerInteractionHandler } from "./utils/interactionHandler";
 
 dotenv.config();
 
 const discordClient = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages],
 });
+
+// register the global interaction handler ONCE (before or after login is fine)
+registerInteractionHandler(discordClient);
 
 const connection = new Connection(
   process.env.SOLANA_HTTP_URL || clusterApiUrl("mainnet-beta")
@@ -41,7 +45,8 @@ const letsbonkMigrationQueue = createQueue(
         inner.parsed?.type === "initializeAccount3" &&
         inner.parsed.info.owner ===
           "GpMZbSM2GgvTKHJirzeGfMFoaZ8UR2X7F4v8vHTvxFbL" &&
-        inner.parsed.info.mint.endsWith("bonk"),
+        inner.parsed.info.mint !==
+          "So11111111111111111111111111111111111111112",
       launchPad: "LetsBonk",
     }),
   5000

@@ -1,3 +1,4 @@
+// src/utils/discord.ts (replace sendDiscordAlert)
 import {
   Client,
   TextChannel,
@@ -6,7 +7,6 @@ import {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
-  PermissionsBitField,
   EmbedBuilder,
 } from "discord.js";
 import { TokenAlert } from "../types.js";
@@ -18,7 +18,6 @@ export async function sendDiscordAlert(
 ) {
   try {
     const channel = await client.channels.fetch(channelId);
-
     if (!channel?.isTextBased()) return;
     const textChannel = channel as TextChannel | NewsChannel | ThreadChannel;
 
@@ -27,10 +26,9 @@ export async function sendDiscordAlert(
       maximumFractionDigits: 2,
     });
 
-    // 🔹 Create a clean embed with emojis
     const embed = new EmbedBuilder()
-      .setColor("#5865F2") // Discord blurple
-      .setTitle(`  🚨   ${token.launchPad} Migration   🚨`)
+      .setColor("#5865F2")
+      .setTitle(`🚨 ${token.launchPad} Migration 🚨`)
       .addFields(
         {
           name: "🚀 Token",
@@ -39,18 +37,12 @@ export async function sendDiscordAlert(
         },
         {
           name: "💎 Market Cap",
-          value: `${
-            token.marketCap
-              ? numberFormatter.format(Number(token.marketCap))
-              : "-"
-          }`,
+          value: token.marketCap
+            ? `$${numberFormatter.format(Number(token.marketCap))}`
+            : "-",
           inline: true,
         },
-        {
-          name: "Mint Address",
-          value: `\`${token.mint}\``,
-          inline: false,
-        }
+        { name: "Mint Address", value: `\`${token.mint}\``, inline: false }
       )
       .setTimestamp()
       .setFooter({
@@ -58,75 +50,24 @@ export async function sendDiscordAlert(
         iconURL: client.user?.avatarURL() || undefined,
       });
 
-    // 🔹 Buttons row: Copy + Delete
+    // IMPORTANT: encode the mint into the customId so global handler can read it
+    // customId length max is ~100 characters; solana mint is ~44 so it's safe
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
-        .setCustomId("copy_contract")
+        .setCustomId(`copy_contract:${token.mint}`)
         .setLabel("📋 Copy Contract")
         .setStyle(ButtonStyle.Primary),
       new ButtonBuilder()
-        .setCustomId("delete_message")
+        .setCustomId(`delete_message`) // we will delete interaction.message in handler
         .setLabel("🗑️ Delete Message")
         .setStyle(ButtonStyle.Danger)
     );
 
-    // 🔹 Send embed with buttons
-    const sentMessage = await textChannel.send({
+    await textChannel.send({
       embeds: [embed],
       components: [row],
     });
-
-    // 🔹 Collector for interactions
-    const collector = sentMessage.createMessageComponentCollector({
-      time: 10 * 60 * 1000,
-    });
-
-    collector.on("collect", async (interaction) => {
-      if (!interaction.isButton()) return;
-
-      try {
-        if (interaction.customId === "copy_contract") {
-          await interaction.reply({
-            content: `${token.mint}`,
-            ephemeral: true,
-          });
-        }
-
-        if (interaction.customId === "delete_message") {
-          const member = interaction.member;
-          if (
-            "permissions" in member &&
-            member.permissions.has(PermissionsBitField.Flags.ManageMessages)
-          ) {
-            // ✅ Defer update immediately to acknowledge the interaction
-            await interaction.deferUpdate();
-
-            // Delete the message
-            await sentMessage.delete();
-
-            // Optional: ephemeral confirmation
-            await interaction.followUp({
-              content: "Message deleted ✅",
-              ephemeral: true,
-            });
-          } else {
-            await interaction.reply({
-              content: "You do not have permission to delete this message ❌",
-              ephemeral: true,
-            });
-          }
-        }
-      } catch (err) {
-        console.error("Interaction error:", err);
-        if (!interaction.replied && !interaction.deferred) {
-          await interaction.reply({
-            content: "Something went wrong ❌",
-            ephemeral: true,
-          });
-        }
-      }
-    });
   } catch (err) {
-    console.error(`[Discord] Failed to send alert:`, err);
+    console.error("[Discord] Failed to send alert:", err);
   }
 }

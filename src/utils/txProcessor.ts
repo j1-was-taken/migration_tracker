@@ -53,6 +53,13 @@ export const createTxProcessor =
               connection
             );
 
+            if (tokenAlert.name === mintAddress) {
+              console.log(
+                `Skipping alert for ${mintAddress} as metadata fetch failed`
+              );
+              continue;
+            }
+
             await sendDiscordAlert(
               discordClient,
               process.env[config.discordChannelEnv] || "",
