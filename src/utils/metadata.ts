@@ -107,6 +107,10 @@ export async function getTokenMetadata(
       }
     }
 
+    if (!jsonData.name && !nft?.name && name != mintAddress) {
+      console.log(`[DEBUG] Name found via Helius: ${name} for ${mintAddress}`);
+    }
+
     return {
       name: jsonData.name || nft?.name || name || mintAddress,
       symbol: jsonData.symbol || nft?.symbol || symbol || mintAddress,
