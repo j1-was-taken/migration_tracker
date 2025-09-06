@@ -147,6 +147,10 @@ export async function getTokenMetadata(
     // ignore
   }
 
+  console.log(
+    `Metadata fetch via Metaplex failed for ${mintAddress}, trying Moralis...`
+  );
+
   // 3️⃣ Final fallback: Moralis
   const moralisData = await fetchFromMoralis(mintAddress);
   if (moralisData?.name || moralisData?.symbol) {
