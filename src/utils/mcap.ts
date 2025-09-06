@@ -3,12 +3,14 @@ import { Connection, PublicKey } from "@solana/web3.js";
 import { fetchFromMoralis } from "./metadata";
 
 /**
- * 🔹 Try to get token supply from RPC first, then Moralis if RPC fails
+ * 🔹 Fetch token supply
+ * Tries RPC first, then falls back to Moralis
  */
 export async function getTokenSupply(
   mintAddress: string,
   connection: Connection
 ): Promise<number> {
+  // 1️⃣ Try RPC
   try {
     const mintPubkey = new PublicKey(mintAddress);
     const mintInfo = await connection.getParsedAccountInfo(mintPubkey);
@@ -16,27 +18,23 @@ export async function getTokenSupply(
     if (mintInfo.value) {
       const data = (mintInfo.value.data as any).parsed.info;
       const supply = Number(data.supply) / Math.pow(10, data.decimals);
-      console.log(`[SUPPLY] RPC supply for ${mintAddress}: ${supply}`);
+      console.log(`[SUPPLY][RPC] ${mintAddress}: ${supply}`);
       return supply;
     }
   } catch (err: any) {
-    console.warn(
-      `[SUPPLY] RPC fetch failed for ${mintAddress}: ${err.message}`
-    );
+    console.warn(`[SUPPLY][RPC] Failed for ${mintAddress}: ${err.message}`);
   }
 
-  // 🔹 fallback to Moralis
+  // 2️⃣ Fallback: Moralis
   try {
     const moralisData = await fetchFromMoralis(mintAddress);
     if (moralisData?.totalSupplyFormatted) {
       const supply = Number(moralisData.totalSupplyFormatted);
-      console.log(`[SUPPLY] Moralis supply for ${mintAddress}: ${supply}`);
+      console.log(`[SUPPLY][Moralis] ${mintAddress}: ${supply}`);
       return supply;
     }
   } catch (err: any) {
-    console.warn(
-      `[SUPPLY] Moralis fallback failed for ${mintAddress}: ${err.message}`
-    );
+    console.warn(`[SUPPLY][Moralis] Failed for ${mintAddress}: ${err.message}`);
   }
 
   console.error(`[SUPPLY] Could not resolve supply for ${mintAddress}`);
@@ -44,9 +42,11 @@ export async function getTokenSupply(
 }
 
 /**
- * 🔹 Get token price from Jupiter v3 API, fallback Moralis FDV
+ * 🔹 Fetch token price in USD
+ * Tries Jupiter v3 first, then falls back to Moralis FDV
  */
 async function getTokenPriceUsd(mint: string): Promise<number> {
+  // 1️⃣ Jupiter v3
   try {
     const res = await axios.get("https://lite-api.jup.ag/price/v3", {
       params: { ids: mint },
@@ -54,24 +54,17 @@ async function getTokenPriceUsd(mint: string): Promise<number> {
     });
 
     const entry = res.data?.[mint];
-    if (!entry) {
-      console.warn(`[PRICE] No data for token ${mint} in response`);
-      return 0;
-    }
-
-    const price = entry?.usdPrice ? parseFloat(entry.usdPrice) : 0;
-    if (price > 0) {
-      console.log(`[PRICE] Jupiter v3 price for ${mint}: $${price}`);
+    if (entry?.usdPrice) {
+      const price = parseFloat(entry.usdPrice);
+      console.log(`[PRICE][Jupiter] ${mint}: $${price}`);
       return price;
     }
-
-    console.warn(`[PRICE] Jupiter v3 returned no usdPrice field for ${mint}`);
+    console.warn(`[PRICE][Jupiter] No USD price for ${mint}`);
   } catch (err: any) {
-    console.error(
-      `[PRICE] Jupiter v3 request failed for ${mint}: ${err.message}`
-    );
+    console.error(`[PRICE][Jupiter] Failed for ${mint}: ${err.message}`);
   }
-  // 🔹 fallback: derive price from Moralis FDV + supply
+
+  // 2️⃣ Fallback: Moralis FDV / supply
   try {
     const moralisData = await fetchFromMoralis(mint);
     if (moralisData?.fullyDilutedValue && moralisData?.totalSupplyFormatted) {
@@ -79,14 +72,12 @@ async function getTokenPriceUsd(mint: string): Promise<number> {
       const supply = Number(moralisData.totalSupplyFormatted);
       if (fdv > 0 && supply > 0) {
         const impliedPrice = fdv / supply;
-        console.log(
-          `[PRICE] Fallback price from Moralis FDV: $${impliedPrice}`
-        );
+        console.log(`[PRICE][Moralis FDV] ${mint}: $${impliedPrice}`);
         return impliedPrice;
       }
     }
   } catch (err: any) {
-    console.warn(`[PRICE] Moralis fallback failed for ${mint}: ${err.message}`);
+    console.warn(`[PRICE][Moralis FDV] Failed for ${mint}: ${err.message}`);
   }
 
   console.error(`[PRICE] Could not resolve price for ${mint}`);
@@ -94,7 +85,8 @@ async function getTokenPriceUsd(mint: string): Promise<number> {
 }
 
 /**
- * 🔹 Market cap calculator
+ * 🔹 Calculate token market cap
+ * Uses price * supply, with Moralis FDV as fallback
  */
 export async function getMarketCap(
   mintAddress: string,
@@ -105,27 +97,26 @@ export async function getMarketCap(
     getTokenSupply(mintAddress, connection),
   ]);
 
+  // 1️⃣ Price * supply
   if (priceUsd > 0 && supply > 0) {
     const mcap = priceUsd * supply;
-    console.log(
-      `[MCAP] Calculated market cap for ${mintAddress}: $${mcap.toLocaleString()}`
-    );
+    console.log(`[MCAP][Calc] ${mintAddress}: $${mcap.toLocaleString()}`);
     return mcap;
   }
 
-  // 🔹 fallback: Moralis FDV directly
+  // 2️⃣ Fallback: Moralis FDV
   try {
     const moralisData = await fetchFromMoralis(mintAddress);
     if (moralisData?.fullyDilutedValue) {
       const fdv = Number(moralisData.fullyDilutedValue);
       console.log(
-        `[MCAP] Fallback to Moralis FDV for ${mintAddress}: $${fdv.toLocaleString()}`
+        `[MCAP][Moralis FDV] ${mintAddress}: $${fdv.toLocaleString()}`
       );
       return fdv;
     }
   } catch (err: any) {
     console.warn(
-      `[MCAP] Moralis FDV fallback failed for ${mintAddress}: ${err.message}`
+      `[MCAP][Moralis FDV] Failed for ${mintAddress}: ${err.message}`
     );
   }
 
