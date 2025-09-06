@@ -1,3 +1,4 @@
+import axios from "axios";
 import { Connection, PublicKey } from "@solana/web3.js";
 import { fetchFromMoralis } from "./metadata";
 
@@ -43,28 +44,26 @@ export async function getTokenSupply(
 }
 
 /**
- * 🔹 Get token price from Jupiter API first, then Moralis FDV fallback
+ * 🔹 Get token price from Jupiter v3 API, fallback Moralis FDV
  */
 async function getTokenPriceUsd(mint: string): Promise<number> {
   try {
-    const url = `https://api.jup.ag/price/v2?ids=${mint}&showExtraInfo=true`;
-    const res = await fetch(url, {
-      headers: { "Content-Type": "application/json" },
+    const res = await axios.get("https://lite-api.jup.ag/price/v3", {
+      params: { ids: mint },
+      headers: { Accept: "application/json" },
     });
-    if (!res.ok) throw new Error("Jupiter price fetch failed");
 
-    const data = await res.json();
-    const entry = data.data?.[mint];
+    const entry = res.data?.data?.[mint];
     const price = entry?.price ? parseFloat(entry.price) : 0;
 
     if (price > 0) {
-      console.log(`[PRICE] Jupiter price for ${mint}: $${price}`);
+      console.log(`[PRICE] Jupiter v3 price for ${mint}: $${price}`);
       return price;
     }
 
-    console.warn(`[PRICE] Jupiter returned no price for ${mint}`);
+    console.warn(`[PRICE] Jupiter v3 returned no price for ${mint}`);
   } catch (err: any) {
-    console.warn(`[PRICE] Jupiter failed for ${mint}: ${err.message}`);
+    console.warn(`[PRICE] Jupiter v3 failed for ${mint}: ${err.message}`);
   }
 
   // 🔹 fallback: derive price from Moralis FDV + supply
@@ -90,7 +89,7 @@ async function getTokenPriceUsd(mint: string): Promise<number> {
 }
 
 /**
- * 🔹 Market cap calculator with logging and fallback
+ * 🔹 Market cap calculator
  */
 export async function getMarketCap(
   mintAddress: string,
