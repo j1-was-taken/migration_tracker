@@ -57,19 +57,22 @@ const letsbonkMigrationQueue = createQueue(
   5000
 );
 
-// WebSocket
-createSolanaWs(pumpfunProgramId, (signature, logs) => {
-  if (logs.some((l) => l.includes("Instruction: Migrate"))) {
-    pumpfunMigrationQueue.add(signature);
-  }
-});
+createSolanaWs(
+  [pumpfunProgramId, letsBonkProgramId],
+  (programId, signature, logs) => {
+    if (programId === pumpfunProgramId) {
+      if (logs.some((l) => l.includes("Instruction: Migrate"))) {
+        pumpfunMigrationQueue.add(signature);
+      }
+    }
 
-// WebSocket
-createSolanaWs(letsBonkProgramId, (signature, logs) => {
-  if (logs.some((l) => l.includes("Instruction: MigrateToCpswap"))) {
-    letsbonkMigrationQueue.add(signature);
+    if (programId === letsBonkProgramId) {
+      if (logs.some((l) => l.includes("Instruction: MigrateToCpswap"))) {
+        letsbonkMigrationQueue.add(signature);
+      }
+    }
   }
-});
+);
 
 // Discord login
 discordClient.once("clientReady", () => {

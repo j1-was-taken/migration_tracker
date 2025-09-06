@@ -21,6 +21,9 @@ const connection = new Connection(
 );
 const txProcessor = createTxProcessor(connection, discordClient);
 
+const pumpfunProgramId = "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P";
+const letsBonkProgramId = "LanMV9sAd7wArD4vJFi2qDdfnVhFxYSUg6eADduJ3uj";
+
 // bot.ts
 const pumpfunMigrationQueue = createQueue(
   (sig: string) =>
@@ -32,7 +35,7 @@ const pumpfunMigrationQueue = createQueue(
         inner.parsed.info.mint.endsWith("pump") &&
         inner.program === "spl-token",
       launchPad: "PumpFun",
-      programId: "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P",
+      programId: pumpfunProgramId,
     }),
   5000
 );
@@ -49,13 +52,27 @@ const letsbonkMigrationQueue = createQueue(
         inner.parsed.info.mint !==
           "So11111111111111111111111111111111111111112",
       launchPad: "LetsBonk",
-      programId: "LanMV9sAd7wArD4vJFi2qDdfnVhFxYSUg6eADduJ3uj",
+      programId: letsBonkProgramId,
     }),
   5000
 );
 
-letsbonkMigrationQueue.add(
-  "4rXabMYW6hNtTbJHP1kGS1mxsQZM8rF6FKS3yTpFVbBCTvrUWXmJXNEaj6rb4pSA6AqadYi2bv58nTA176dwr6Vv"
+// // WebSocket
+// createSolanaWs(pumpfunProgramId, (signature, logs) => {
+//   if (logs.some((l) => l.includes("Instruction: Migrate"))) {
+//     pumpfunMigrationQueue.add(signature);
+//   }
+// });
+
+// // WebSocket
+// createSolanaWs(letsBonkProgramId, (signature, logs) => {
+//   if (logs.some((l) => l.includes("Instruction: MigrateToCpswap"))) {
+//     letsbonkMigrationQueue.add(signature);
+//   }
+// });
+
+pumpfunMigrationQueue.add(
+  "h9CfU2ixQ891nPYSjwQncpn8fbJmyRPdLE6jQupZ1SJM9dnxx8e54bgowD4snYgBBjTVp1tqei6Lv9JH29zyLX1"
 );
 
 // Discord login
