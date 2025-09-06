@@ -27,10 +27,11 @@ function formatAge(ageMs: number): string {
 async function getBestPairWithRetry(
   mintAddress: string,
   retries = 5,
-  delayMs = 20000 // 20 seconds
+  delayS = 30 // 20 seconds
 ) {
+  const delayMs = delayS * 1000;
   let attempt = 0;
-  while (attempt < retries) {
+  while (attempt <= retries) {
     try {
       const pairData = await getBestPairAddress(mintAddress);
       if (!pairData) throw new Error("No trading pair found for this token");
@@ -65,7 +66,7 @@ export async function fetchDexData(
   // 🔹 Attempt to get best pair info
   let pairData;
   try {
-    pairData = await getBestPairWithRetry(mintAddress, 1);
+    pairData = await getBestPairWithRetry(mintAddress, 30);
   } catch (err) {
     console.log(`No pair data found for ${mintAddress}, using default values.`);
     pairData = null;
