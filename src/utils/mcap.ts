@@ -4,49 +4,64 @@ import { fetchFromMoralis } from "./metadata";
 
 /**
  * 🔹 Fetch token supply
- * Tries RPC first, then falls back to Moralis
  */
 export async function getTokenSupply(
   mintAddress: string,
   connection: Connection
 ): Promise<number> {
-  // 1️⃣ Try RPC
+  const sourcesTried: string[] = [];
+  let supply = 0;
+  let source = "";
+
+  // RPC
   try {
     const mintPubkey = new PublicKey(mintAddress);
     const mintInfo = await connection.getParsedAccountInfo(mintPubkey);
 
     if (mintInfo.value) {
       const data = (mintInfo.value.data as any).parsed.info;
-      const supply = Number(data.supply) / Math.pow(10, data.decimals);
-      console.log(`[SUPPLY][RPC] ${mintAddress}: ${supply}`);
-      return supply;
+      supply = Number(data.supply) / Math.pow(10, data.decimals);
+      source = "RPC";
+    } else {
+      sourcesTried.push("RPC (no data)");
     }
-  } catch (err: any) {
-    console.warn(`[SUPPLY][RPC] Failed for ${mintAddress}: ${err.message}`);
+  } catch {
+    sourcesTried.push("RPC (failed)");
   }
 
-  // 2️⃣ Fallback: Moralis
-  try {
-    const moralisData = await fetchFromMoralis(mintAddress);
-    if (moralisData?.totalSupplyFormatted) {
-      const supply = Number(moralisData.totalSupplyFormatted);
-      console.log(`[SUPPLY][Moralis] ${mintAddress}: ${supply}`);
-      return supply;
+  // Moralis fallback
+  if (!supply) {
+    try {
+      const moralisData = await fetchFromMoralis(mintAddress);
+      if (moralisData?.totalSupplyFormatted) {
+        supply = Number(moralisData.totalSupplyFormatted);
+        source = "Moralis";
+      } else {
+        sourcesTried.push("Moralis (no data)");
+      }
+    } catch {
+      sourcesTried.push("Moralis (failed)");
     }
-  } catch (err: any) {
-    console.warn(`[SUPPLY][Moralis] Failed for ${mintAddress}: ${err.message}`);
   }
 
-  console.error(`[SUPPLY] Could not resolve supply for ${mintAddress}`);
-  return 0;
+  console.log(
+    `[SUPPLY] ${mintAddress} => ${supply} (source: ${supply ? source : "none"}${
+      sourcesTried.length ? ", tried: " + sourcesTried.join(", ") : ""
+    })`
+  );
+
+  return supply;
 }
 
 /**
  * 🔹 Fetch token price in USD
- * Tries Jupiter v3 first, then falls back to Moralis FDV
  */
 async function getTokenPriceUsd(mint: string): Promise<number> {
-  // 1️⃣ Jupiter v3
+  const sourcesTried: string[] = [];
+  let price = 0;
+  let source = "";
+
+  // Jupiter v3
   try {
     const res = await axios.get("https://lite-api.jup.ag/price/v3", {
       params: { ids: mint },
@@ -55,38 +70,47 @@ async function getTokenPriceUsd(mint: string): Promise<number> {
 
     const entry = res.data?.[mint];
     if (entry?.usdPrice) {
-      const price = parseFloat(entry.usdPrice);
-      console.log(`[PRICE][Jupiter] ${mint}: $${price}`);
-      return price;
+      price = parseFloat(entry.usdPrice);
+      source = "Jupiter v3";
+    } else {
+      sourcesTried.push("Jupiter v3 (no data)");
     }
-    console.warn(`[PRICE][Jupiter] No USD price for ${mint}`);
-  } catch (err: any) {
-    console.error(`[PRICE][Jupiter] Failed for ${mint}: ${err.message}`);
+  } catch {
+    sourcesTried.push("Jupiter v3 (failed)");
   }
 
-  // 2️⃣ Fallback: Moralis FDV / supply
-  try {
-    const moralisData = await fetchFromMoralis(mint);
-    if (moralisData?.fullyDilutedValue && moralisData?.totalSupplyFormatted) {
-      const fdv = Number(moralisData.fullyDilutedValue);
-      const supply = Number(moralisData.totalSupplyFormatted);
-      if (fdv > 0 && supply > 0) {
-        const impliedPrice = fdv / supply;
-        console.log(`[PRICE][Moralis FDV] ${mint}: $${impliedPrice}`);
-        return impliedPrice;
+  // Moralis FDV fallback
+  if (!price) {
+    try {
+      const moralisData = await fetchFromMoralis(mint);
+      if (moralisData?.fullyDilutedValue && moralisData?.totalSupplyFormatted) {
+        const fdv = Number(moralisData.fullyDilutedValue);
+        const supply = Number(moralisData.totalSupplyFormatted);
+        if (fdv > 0 && supply > 0) {
+          price = fdv / supply;
+          source = "Moralis FDV";
+        } else {
+          sourcesTried.push("Moralis FDV (invalid data)");
+        }
+      } else {
+        sourcesTried.push("Moralis FDV (no data)");
       }
+    } catch {
+      sourcesTried.push("Moralis FDV (failed)");
     }
-  } catch (err: any) {
-    console.warn(`[PRICE][Moralis FDV] Failed for ${mint}: ${err.message}`);
   }
 
-  console.error(`[PRICE] Could not resolve price for ${mint}`);
-  return 0;
+  console.log(
+    `[PRICE] ${mint} => $${price} (source: ${price ? source : "none"}${
+      sourcesTried.length ? ", tried: " + sourcesTried.join(", ") : ""
+    })`
+  );
+
+  return price;
 }
 
 /**
  * 🔹 Calculate token market cap
- * Uses price * supply, with Moralis FDV as fallback
  */
 export async function getMarketCap(
   mintAddress: string,
@@ -97,29 +121,27 @@ export async function getMarketCap(
     getTokenSupply(mintAddress, connection),
   ]);
 
-  // 1️⃣ Price * supply
+  let mcap = 0;
+  let source = "";
+
   if (priceUsd > 0 && supply > 0) {
-    const mcap = priceUsd * supply;
-    console.log(`[MCAP][Calc] ${mintAddress}: $${mcap.toLocaleString()}`);
-    return mcap;
+    mcap = priceUsd * supply;
+    source = "Calculated (price * supply)";
+  } else {
+    try {
+      const moralisData = await fetchFromMoralis(mintAddress);
+      if (moralisData?.fullyDilutedValue) {
+        mcap = Number(moralisData.fullyDilutedValue);
+        source = "Moralis FDV fallback";
+      }
+    } catch {}
   }
 
-  // 2️⃣ Fallback: Moralis FDV
-  try {
-    const moralisData = await fetchFromMoralis(mintAddress);
-    if (moralisData?.fullyDilutedValue) {
-      const fdv = Number(moralisData.fullyDilutedValue);
-      console.log(
-        `[MCAP][Moralis FDV] ${mintAddress}: $${fdv.toLocaleString()}`
-      );
-      return fdv;
-    }
-  } catch (err: any) {
-    console.warn(
-      `[MCAP][Moralis FDV] Failed for ${mintAddress}: ${err.message}`
-    );
-  }
+  console.log(
+    `[MCAP] ${mintAddress} => $${mcap.toLocaleString()} (source: ${
+      source || "none"
+    })`
+  );
 
-  console.error(`[MCAP] Could not resolve market cap for ${mintAddress}`);
-  return 0;
+  return mcap;
 }

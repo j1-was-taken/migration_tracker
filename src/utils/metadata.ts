@@ -16,11 +16,8 @@ async function loadSolanaTokenList(): Promise<any[]> {
     );
     const data = await res.json();
     solanaTokenListCache = data.tokens || [];
-    console.log(
-      `[SOLANA TOKEN LIST] Loaded ${solanaTokenListCache.length} tokens`
-    );
-  } catch (err) {
-    console.warn("Failed to load Solana token list:", err);
+  } catch {
+    // ignore
   }
 
   return solanaTokenListCache;
@@ -41,17 +38,10 @@ async function fetchTokenNameAndSymbol(mintAddress: string) {
         params: { id: mintAddress },
       }),
     });
-
-    const data = await res.json();
-    const metadata = data.result?.content?.metadata;
-
-    if (!metadata) return { name: mintAddress, symbol: mintAddress };
-
-    console.log(`[HELIUS] Found metadata for ${mintAddress}`);
-    return { name: metadata.name, symbol: metadata.symbol };
+    const metadata = (await res.json()).result?.content?.metadata;
+    return metadata ? { name: metadata.name, symbol: metadata.symbol } : null;
   } catch {
-    console.warn(`[HELIUS] Failed to fetch metadata for ${mintAddress}`);
-    return { name: mintAddress, symbol: mintAddress };
+    return null;
   }
 }
 
@@ -70,12 +60,9 @@ export async function fetchFromMoralis(mintAddress: string) {
         },
       }
     );
-
     if (!res.ok) return null;
-    console.log(`[MORALIS] Metadata fetched for ${mintAddress}`);
     return await res.json();
   } catch {
-    console.warn(`[MORALIS] Failed to fetch metadata for ${mintAddress}`);
     return null;
   }
 }
@@ -85,31 +72,18 @@ export async function fetchFromMoralis(mintAddress: string) {
 // ----------------------------
 export async function fetchTokenNameFromJup(
   mint: string
-): Promise<{ jupName: string; jupSymbol: string }> {
+): Promise<{ jupName: string; jupSymbol: string } | null> {
   try {
     const res = await axios.get("https://lite-api.jup.ag/tokens/v2/search", {
       params: { query: mint },
       headers: { Accept: "application/json" },
       maxBodyLength: Infinity,
     });
-
-    const data = res.data;
-    if (!Array.isArray(data) || !data.length) {
-      console.warn(`[JUPITER] No data returned for ${mint}`);
-      return { jupName: mint, jupSymbol: mint };
-    }
-
-    const token = data[0];
-    if (!token.name || !token.symbol) {
-      console.warn(`[JUPITER] Missing name/symbol for ${mint}`);
-      return { jupName: mint, jupSymbol: mint };
-    }
-
-    console.log(`[JUPITER] Found token info for ${mint}`);
+    const token = res.data?.[0];
+    if (!token?.name || !token?.symbol) return null;
     return { jupName: token.name, jupSymbol: token.symbol };
-  } catch (err: any) {
-    console.error(`[JUPITER] Request failed for ${mint}:`, err.message);
-    return { jupName: mint, jupSymbol: mint };
+  } catch {
+    return null;
   }
 }
 
@@ -132,13 +106,15 @@ export async function getTokenMetadata(
     rawJson: null,
   };
 
+  let source = "Default";
+  let jsonData: any = {};
+
   // 1️⃣ Solana Token List
   try {
     const tokenList = await loadSolanaTokenList();
     const tokenInfo = tokenList.find((t) => t.address === mintAddress);
-
     if (tokenInfo) {
-      console.log(`[SOURCE] Solana Token List`);
+      source = "Solana Token List";
       return {
         name: tokenInfo.name || mintAddress,
         symbol: tokenInfo.symbol || mintAddress,
@@ -155,7 +131,7 @@ export async function getTokenMetadata(
     // ignore
   }
 
-  // 2️⃣ Metaplex + Helius + Moralis + Jupiter
+  // 2️⃣ Metaplex NFT + Helius + Moralis + Jupiter
   try {
     const mintPubkey = new PublicKey(mintAddress);
     const metaplex = Metaplex.make(connection);
@@ -164,12 +140,10 @@ export async function getTokenMetadata(
       .nfts()
       .findByMint({ mintAddress: mintPubkey })
       .catch(() => null);
-    const { name: heliusName, symbol: heliusSymbol } =
-      await fetchTokenNameAndSymbol(mintAddress);
+    const heliusData = await fetchTokenNameAndSymbol(mintAddress);
     const moralisData = await fetchFromMoralis(mintAddress);
-    const { jupName, jupSymbol } = await fetchTokenNameFromJup(mintAddress);
+    const jupiterData = await fetchTokenNameFromJup(mintAddress);
 
-    let jsonData: any = {};
     if (nft?.uri) {
       try {
         const res = await fetch(nft.uri);
@@ -177,27 +151,35 @@ export async function getTokenMetadata(
       } catch {
         // ignore
       }
+      source = "NFT Metadata";
+    } else if (heliusData) {
+      source = "Helius RPC";
+    } else if (moralisData) {
+      source = "Moralis API";
+    } else if (jupiterData) {
+      source = "Jupiter API";
     }
 
-    console.log(
-      `[SOURCE] ${nft?.uri ? "NFT Metadata" : "Helius/Moralis/Jupiter"}`
-    );
+    const name =
+      jsonData.name ||
+      nft?.name ||
+      heliusData?.name ||
+      moralisData?.name ||
+      jupiterData?.jupName ||
+      mintAddress;
+    const symbol =
+      jsonData.symbol ||
+      nft?.symbol ||
+      heliusData?.symbol ||
+      moralisData?.symbol ||
+      jupiterData?.jupSymbol ||
+      mintAddress;
+
+    console.log(`[SOURCE] ${source} provided metadata for ${mintAddress}`);
 
     return {
-      name:
-        jsonData.name ||
-        nft?.name ||
-        heliusName ||
-        moralisData?.name ||
-        jupName ||
-        mintAddress,
-      symbol:
-        jsonData.symbol ||
-        nft?.symbol ||
-        heliusSymbol ||
-        moralisData?.symbol ||
-        jupSymbol ||
-        mintAddress,
+      name,
+      symbol,
       image: jsonData.image || nft?.json?.image || "",
       description: jsonData.description || nft?.json?.description || "",
       website:
@@ -215,6 +197,6 @@ export async function getTokenMetadata(
     // ignore
   }
 
-  console.log(`[SOURCE] Default metadata`);
+  console.log(`[SOURCE] ${source} (default metadata) used for ${mintAddress}`);
   return defaultMeta;
 }
