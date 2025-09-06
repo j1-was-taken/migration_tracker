@@ -21,25 +21,52 @@ async function loadSolanaTokenList() {
 }
 
 /**
- * Fetch token name and symbol from Helius RPC (or any JSON-RPC endpoint)
+ * Fetch token name and symbol from Helius RPC
  */
 async function fetchTokenNameAndSymbol(mintAddress: string) {
-  const response = await fetch(String(process.env.SOLANA_HTTP_URL), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      jsonrpc: "2.0",
-      id: "text",
-      method: "getAsset",
-      params: { id: mintAddress },
-    }),
-  });
+  try {
+    const response = await fetch(String(process.env.SOLANA_HTTP_URL), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: "text",
+        method: "getAsset",
+        params: { id: mintAddress },
+      }),
+    });
 
-  const data = await response.json();
-  const metadata = data.result?.content?.metadata;
-  if (!metadata) return { name: mintAddress, symbol: mintAddress };
+    const data = await response.json();
+    const metadata = data.result?.content?.metadata;
+    if (!metadata) return { name: mintAddress, symbol: mintAddress };
 
-  return { name: metadata.name, symbol: metadata.symbol };
+    return { name: metadata.name, symbol: metadata.symbol };
+  } catch {
+    return { name: mintAddress, symbol: mintAddress };
+  }
+}
+
+/**
+ * Fallback fetch via Moralis API
+ */
+async function fetchFromMoralis(mintAddress: string) {
+  try {
+    const response = await fetch(
+      `https://solana-gateway.moralis.io/token/mainnet/${mintAddress}/metadata`,
+      {
+        method: "GET",
+        headers: {
+          accept: "application/json",
+          "X-API-Key": String(process.env.MORALIS_API_KEY),
+        },
+      }
+    );
+
+    if (!response.ok) return null;
+    return await response.json();
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -82,33 +109,26 @@ export async function getTokenMetadata(
     // ignore
   }
 
-  // 2️⃣ Try Metaplex + Helius for NFTs / new tokens
+  // 2️⃣ Try Metaplex + Helius
   try {
     const mintPubkey = new PublicKey(mintAddress);
     const metaplex = Metaplex.make(connection);
 
-    // Get NFT data if it exists
     const nft = await metaplex
       .nfts()
       .findByMint({ mintAddress: mintPubkey })
       .catch(() => null);
 
-    // Get name and symbol from Helius RPC as fallback
     const { name, symbol } = await fetchTokenNameAndSymbol(mintAddress);
 
-    // Fetch JSON metadata if URI exists
     let jsonData: any = {};
     if (nft?.uri) {
       try {
         const res = await fetch(nft.uri);
         if (res.ok) jsonData = await res.json();
       } catch {
-        // ignore fetch errors
+        // ignore
       }
-    }
-
-    if (!jsonData.name && !nft?.name && name != mintAddress) {
-      console.log(`[DEBUG] Name found via Helius: ${name} for ${mintAddress}`);
     }
 
     return {
@@ -124,9 +144,25 @@ export async function getTokenMetadata(
       rawJson: jsonData,
     };
   } catch {
-    // ignore errors and continue
+    // ignore
   }
 
-  // 3️⃣ Fallback to mint address only
+  // 3️⃣ Final fallback: Moralis
+  const moralisData = await fetchFromMoralis(mintAddress);
+  if (moralisData?.name || moralisData?.symbol) {
+    return {
+      name: moralisData.name || mintAddress,
+      symbol: moralisData.symbol || mintAddress,
+      image: moralisData.image || "",
+      description: moralisData.description || "",
+      website: moralisData.website || moralisData.external_url || "",
+      twitter: moralisData.twitter || "",
+      telegram: moralisData.telegram || "",
+      discord: moralisData.discord || "",
+      rawJson: moralisData,
+    };
+  }
+
+  // 4️⃣ If everything fails
   return defaultMeta;
 }
