@@ -49,7 +49,7 @@ async function fetchTokenNameAndSymbol(mintAddress: string) {
 /**
  * Fallback fetch via Moralis API
  */
-async function fetchFromMoralis(mintAddress: string) {
+export async function fetchFromMoralis(mintAddress: string) {
   try {
     const response = await fetch(
       `https://solana-gateway.moralis.io/token/mainnet/${mintAddress}/metadata`,
@@ -131,13 +131,25 @@ export async function getTokenMetadata(
       }
     }
 
+    const moralisData = await fetchFromMoralis(mintAddress);
+
     return {
-      name: jsonData.name || nft?.name || name || mintAddress,
-      symbol: jsonData.symbol || nft?.symbol || symbol || mintAddress,
+      name:
+        jsonData.name || nft?.name || name || moralisData.name || mintAddress,
+      symbol:
+        jsonData.symbol ||
+        nft?.symbol ||
+        symbol ||
+        moralisData.symbol ||
+        mintAddress,
       image: jsonData.image || nft?.json?.image || "",
       description: jsonData.description || nft?.json?.description || "",
       website:
-        jsonData.website || jsonData.external_url || nft?.json?.website || "",
+        jsonData.website ||
+        jsonData.external_url ||
+        nft?.json?.website ||
+        moralisData.external_url ||
+        "",
       twitter: jsonData.twitter || nft?.json?.twitter || "",
       telegram: jsonData.telegram || nft?.json?.telegram || "",
       discord: jsonData.discord || nft?.json?.discord || "",
@@ -145,26 +157,6 @@ export async function getTokenMetadata(
     };
   } catch {
     // ignore
-  }
-
-  console.log(
-    `Metadata fetch via Metaplex failed for ${mintAddress}, trying Moralis...`
-  );
-
-  // 3️⃣ Final fallback: Moralis
-  const moralisData = await fetchFromMoralis(mintAddress);
-  if (moralisData?.name || moralisData?.symbol) {
-    return {
-      name: moralisData.name || mintAddress,
-      symbol: moralisData.symbol || mintAddress,
-      image: moralisData.image || "",
-      description: moralisData.description || "",
-      website: moralisData.website || moralisData.external_url || "",
-      twitter: moralisData.twitter || "",
-      telegram: moralisData.telegram || "",
-      discord: moralisData.discord || "",
-      rawJson: moralisData,
-    };
   }
 
   // 4️⃣ If everything fails

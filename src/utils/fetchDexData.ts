@@ -65,7 +65,7 @@ export async function fetchDexData(
   // 🔹 Attempt to get best pair info
   let pairData;
   try {
-    pairData = await getBestPairWithRetry(mintAddress, 0);
+    pairData = await getBestPairWithRetry(mintAddress, 1);
   } catch (err) {
     console.log(`No pair data found for ${mintAddress}, using default values.`);
     pairData = null;
