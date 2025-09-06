@@ -64,13 +64,13 @@ export async function fetchDexData(
   const tokenSymbol = metadataV2?.symbol || mintAddress;
 
   // 🔹 Attempt to get best pair info
-  let pairData;
-  try {
-    pairData = await getBestPairWithRetry(mintAddress, 3, 30);
-  } catch (err) {
-    console.log(`No pair data found for ${mintAddress}, using default values.`);
-    pairData = null;
-  }
+  let pairData = null;
+  // try {
+  //   pairData = await getBestPairWithRetry(mintAddress, 3, 30);
+  // } catch (err) {
+  //   console.log(`No pair data found for ${mintAddress}, using default values.`);
+  //   pairData = null;
+  // }
 
   // 🔹 Default values
   let pairAddress = "";

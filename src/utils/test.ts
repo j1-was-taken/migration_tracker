@@ -1,42 +1,44 @@
 import axios from "axios";
 
-async function getTokenPriceUsd(mint: string): Promise<number> {
+// ----------------------------
+// Fetch token info via Jupiter API
+// ----------------------------
+export async function fetchTokenNameFromJup(
+  mint: string
+): Promise<{ jupName: string; jupSymbol: string }> {
   try {
-    const res = await axios.get("https://lite-api.jup.ag/price/v3", {
-      params: { ids: mint },
+    const res = await axios.get("https://lite-api.jup.ag/tokens/v2/search", {
+      params: { query: mint },
       headers: { Accept: "application/json" },
+      maxBodyLength: Infinity,
     });
 
-    console.log(
-      `[DEBUG] Full Jupiter v3 response for ${mint}:`,
-      JSON.stringify(res.data, null, 2)
-    );
-
-    const entry = res.data?.[mint];
-    if (!entry) {
-      console.warn(`[PRICE] No data for token ${mint} in response`);
-      return 0;
+    const data = res.data;
+    if (!Array.isArray(data) || !data.length) {
+      console.warn(`[NAME] No data returned for token ${mint}`);
+      return { jupName: mint, jupSymbol: mint };
     }
 
-    const price = entry?.usdPrice ? parseFloat(entry.usdPrice) : 0;
-    if (price > 0) {
-      console.log(`[PRICE] Jupiter v3 price for ${mint}: $${price}`);
-      return price;
+    const token = data[0];
+    if (!token.name || !token.symbol) {
+      console.warn(`[NAME] Missing name or symbol for token ${mint}`);
+      return { jupName: mint, jupSymbol: mint };
     }
 
-    console.warn(`[PRICE] Jupiter v3 returned no usdPrice field for ${mint}`);
+    return { jupName: token.name, jupSymbol: token.symbol };
   } catch (err: any) {
-    console.error(
-      `[PRICE] Jupiter v3 request failed for ${mint}: ${err.message}`
-    );
+    console.error(`[NAME] Request failed for ${mint}:`, err.message);
+    return { jupName: mint, jupSymbol: mint };
   }
-
-  return 0;
 }
 
-// Test token
-getTokenPriceUsd("65ZUssMzaDEEVrD87rqG2tZNWZ5fX6mpsYn172Hbbonk").then(
-  (price) => {
-    console.log("Resolved Price:", price);
-  }
-);
+// ----------------------------
+// Wrap top-level await in async function
+// ----------------------------
+(async () => {
+  const { jupName, jupSymbol } = await fetchTokenNameFromJup(
+    "B6EsaZS2WLny87sXWxwU3XzgCdcu4vkaxvvdPZ5Lpump"
+  );
+
+  console.log("Jupiter Name:", jupName, "Symbol:", jupSymbol);
+})();

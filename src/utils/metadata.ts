@@ -1,18 +1,21 @@
 import { Connection, PublicKey } from "@solana/web3.js";
 import { Metaplex } from "@metaplex-foundation/js";
+import axios from "axios";
 
-// Cache Solana Token List
+// ----------------------------
+// Cache for Solana Token List
+// ----------------------------
 let solanaTokenListCache: any[] = [];
 
-async function loadSolanaTokenList() {
-  if (solanaTokenListCache.length > 0) return solanaTokenListCache;
+async function loadSolanaTokenList(): Promise<any[]> {
+  if (solanaTokenListCache.length) return solanaTokenListCache;
 
   try {
     const res = await fetch(
       "https://raw.githubusercontent.com/solana-labs/token-list/main/src/tokens/solana.tokenlist.json"
     );
     const data = await res.json();
-    solanaTokenListCache = data.tokens;
+    solanaTokenListCache = data.tokens || [];
   } catch (err) {
     console.warn("Failed to load Solana token list:", err);
   }
@@ -20,12 +23,12 @@ async function loadSolanaTokenList() {
   return solanaTokenListCache;
 }
 
-/**
- * Fetch token name and symbol from Helius RPC
- */
+// ----------------------------
+// Fetch token metadata via Helius RPC
+// ----------------------------
 async function fetchTokenNameAndSymbol(mintAddress: string) {
   try {
-    const response = await fetch(String(process.env.SOLANA_HTTP_URL), {
+    const res = await fetch(String(process.env.SOLANA_HTTP_URL), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -36,22 +39,22 @@ async function fetchTokenNameAndSymbol(mintAddress: string) {
       }),
     });
 
-    const data = await response.json();
+    const data = await res.json();
     const metadata = data.result?.content?.metadata;
-    if (!metadata) return { name: mintAddress, symbol: mintAddress };
 
+    if (!metadata) return { name: mintAddress, symbol: mintAddress };
     return { name: metadata.name, symbol: metadata.symbol };
   } catch {
     return { name: mintAddress, symbol: mintAddress };
   }
 }
 
-/**
- * Fallback fetch via Moralis API
- */
+// ----------------------------
+// Fallback fetch via Moralis API
+// ----------------------------
 export async function fetchFromMoralis(mintAddress: string) {
   try {
-    const response = await fetch(
+    const res = await fetch(
       `https://solana-gateway.moralis.io/token/mainnet/${mintAddress}/metadata`,
       {
         method: "GET",
@@ -62,16 +65,48 @@ export async function fetchFromMoralis(mintAddress: string) {
       }
     );
 
-    if (!response.ok) return null;
-    return await response.json();
+    if (!res.ok) return null;
+    return await res.json();
   } catch {
     return null;
   }
 }
 
-/**
- * Unified token metadata fetcher
- */
+// ----------------------------
+// Fetch token info via Jupiter API
+// ----------------------------
+export async function fetchTokenNameFromJup(
+  mint: string
+): Promise<{ jupName: string; jupSymbol: string }> {
+  try {
+    const res = await axios.get("https://lite-api.jup.ag/tokens/v2/search", {
+      params: { query: mint },
+      headers: { Accept: "application/json" },
+      maxBodyLength: Infinity,
+    });
+
+    const data = res.data;
+    if (!Array.isArray(data) || !data.length) {
+      console.warn(`[NAME] No data returned for token ${mint}`);
+      return { jupName: mint, jupSymbol: mint };
+    }
+
+    const token = data[0];
+    if (!token.name || !token.symbol) {
+      console.warn(`[NAME] Missing name or symbol for token ${mint}`);
+      return { jupName: mint, jupSymbol: mint };
+    }
+
+    return { jupName: token.name, jupSymbol: token.symbol };
+  } catch (err: any) {
+    console.error(`[NAME] Request failed for ${mint}:`, err.message);
+    return { jupName: mint, jupSymbol: mint };
+  }
+}
+
+// ----------------------------
+// Unified token metadata fetcher
+// ----------------------------
 export async function getTokenMetadata(
   mintAddress: string,
   connection: Connection
@@ -88,10 +123,11 @@ export async function getTokenMetadata(
     rawJson: null,
   };
 
-  // 1️⃣ Try Solana Token List first
+  // 1️⃣ Try Solana Token List
   try {
     const tokenList = await loadSolanaTokenList();
     const tokenInfo = tokenList.find((t) => t.address === mintAddress);
+
     if (tokenInfo) {
       return {
         name: tokenInfo.name || mintAddress,
@@ -119,8 +155,12 @@ export async function getTokenMetadata(
       .findByMint({ mintAddress: mintPubkey })
       .catch(() => null);
 
-    const { name, symbol } = await fetchTokenNameAndSymbol(mintAddress);
+    const { name: heliusName, symbol: heliusSymbol } =
+      await fetchTokenNameAndSymbol(mintAddress);
+    const moralisData = await fetchFromMoralis(mintAddress);
+    const { jupName, jupSymbol } = await fetchTokenNameFromJup(mintAddress);
 
+    // Fetch on-chain JSON metadata if available
     let jsonData: any = {};
     if (nft?.uri) {
       try {
@@ -131,16 +171,20 @@ export async function getTokenMetadata(
       }
     }
 
-    const moralisData = await fetchFromMoralis(mintAddress);
-
     return {
       name:
-        jsonData.name || nft?.name || name || moralisData.name || mintAddress,
+        jsonData.name ||
+        nft?.name ||
+        heliusName ||
+        moralisData?.name ||
+        jupName ||
+        mintAddress,
       symbol:
         jsonData.symbol ||
         nft?.symbol ||
-        symbol ||
-        moralisData.symbol ||
+        heliusSymbol ||
+        moralisData?.symbol ||
+        jupSymbol ||
         mintAddress,
       image: jsonData.image || nft?.json?.image || "",
       description: jsonData.description || nft?.json?.description || "",
@@ -148,7 +192,7 @@ export async function getTokenMetadata(
         jsonData.website ||
         jsonData.external_url ||
         nft?.json?.website ||
-        moralisData.external_url ||
+        moralisData?.external_url ||
         "",
       twitter: jsonData.twitter || nft?.json?.twitter || "",
       telegram: jsonData.telegram || nft?.json?.telegram || "",
@@ -159,6 +203,6 @@ export async function getTokenMetadata(
     // ignore
   }
 
-  // 4️⃣ If everything fails
+  // 3️⃣ Fallback default metadata
   return defaultMeta;
 }
