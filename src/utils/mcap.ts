@@ -53,19 +53,24 @@ async function getTokenPriceUsd(mint: string): Promise<number> {
       headers: { Accept: "application/json" },
     });
 
-    const entry = res.data?.data?.[mint];
-    const price = entry?.price ? parseFloat(entry.price) : 0;
+    const entry = res.data?.[mint];
+    if (!entry) {
+      console.warn(`[PRICE] No data for token ${mint} in response`);
+      return 0;
+    }
 
+    const price = entry?.usdPrice ? parseFloat(entry.usdPrice) : 0;
     if (price > 0) {
       console.log(`[PRICE] Jupiter v3 price for ${mint}: $${price}`);
       return price;
     }
 
-    console.warn(`[PRICE] Jupiter v3 returned no price for ${mint}`);
+    console.warn(`[PRICE] Jupiter v3 returned no usdPrice field for ${mint}`);
   } catch (err: any) {
-    console.warn(`[PRICE] Jupiter v3 failed for ${mint}: ${err.message}`);
+    console.error(
+      `[PRICE] Jupiter v3 request failed for ${mint}: ${err.message}`
+    );
   }
-
   // 🔹 fallback: derive price from Moralis FDV + supply
   try {
     const moralisData = await fetchFromMoralis(mint);
