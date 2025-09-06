@@ -43,30 +43,54 @@ export async function getTokenSupply(
 }
 
 /**
- * 🔹 Get price from DexScreener (fallbacks could be added here too)
+ * 🔹 Get token price from Jupiter API first, then Moralis FDV fallback
  */
 async function getTokenPriceUsd(mint: string): Promise<number> {
   try {
-    const url = `https://api.dexscreener.com/latest/dex/tokens/${mint}`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error("DexScreener price fetch failed");
+    const url = `https://api.jup.ag/price/v2?ids=${mint}&showExtraInfo=true`;
+    const res = await fetch(url, {
+      headers: { "Content-Type": "application/json" },
+    });
+    if (!res.ok) throw new Error("Jupiter price fetch failed");
 
     const data = await res.json();
-    const price = parseFloat(data.pairs?.[0]?.priceUsd || "0");
+    const entry = data.data?.[mint];
+    const price = entry?.price ? parseFloat(entry.price) : 0;
+
     if (price > 0) {
-      console.log(`[PRICE] DexScreener price for ${mint}: $${price}`);
-    } else {
-      console.warn(`[PRICE] DexScreener returned no price for ${mint}`);
+      console.log(`[PRICE] Jupiter price for ${mint}: $${price}`);
+      return price;
     }
-    return price;
+
+    console.warn(`[PRICE] Jupiter returned no price for ${mint}`);
   } catch (err: any) {
-    console.warn(`[PRICE] DexScreener failed for ${mint}: ${err.message}`);
-    return 0;
+    console.warn(`[PRICE] Jupiter failed for ${mint}: ${err.message}`);
   }
+
+  // 🔹 fallback: derive price from Moralis FDV + supply
+  try {
+    const moralisData = await fetchFromMoralis(mint);
+    if (moralisData?.fullyDilutedValue && moralisData?.totalSupplyFormatted) {
+      const fdv = Number(moralisData.fullyDilutedValue);
+      const supply = Number(moralisData.totalSupplyFormatted);
+      if (fdv > 0 && supply > 0) {
+        const impliedPrice = fdv / supply;
+        console.log(
+          `[PRICE] Fallback price from Moralis FDV: $${impliedPrice}`
+        );
+        return impliedPrice;
+      }
+    }
+  } catch (err: any) {
+    console.warn(`[PRICE] Moralis fallback failed for ${mint}: ${err.message}`);
+  }
+
+  console.error(`[PRICE] Could not resolve price for ${mint}`);
+  return 0;
 }
 
 /**
- * 🔹 Market cap calculator with logging and Moralis FDV fallback
+ * 🔹 Market cap calculator with logging and fallback
  */
 export async function getMarketCap(
   mintAddress: string,
@@ -79,11 +103,13 @@ export async function getMarketCap(
 
   if (priceUsd > 0 && supply > 0) {
     const mcap = priceUsd * supply;
-    console.log(`[MCAP] Calculated from RPC+Dex: $${mcap.toLocaleString()}`);
+    console.log(
+      `[MCAP] Calculated market cap for ${mintAddress}: $${mcap.toLocaleString()}`
+    );
     return mcap;
   }
 
-  // 🔹 fallback to Moralis FDV
+  // 🔹 fallback: Moralis FDV directly
   try {
     const moralisData = await fetchFromMoralis(mintAddress);
     if (moralisData?.fullyDilutedValue) {
